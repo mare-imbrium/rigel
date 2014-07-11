@@ -1,0 +1,493 @@
+#!/usr/bin/env ruby
+
+# NOTE: If the listbox is empty, that could mean that you have not generated
+#  ri documentation for this version of ruby. You can do so by doing:
+#    rvm docs generate-ri 
+#    or 
+#    rvm docs generate
+#  (This assumes you are using rvm)
+#
+# WARNING : IF THIS PROGRAM HANGS check the ri command 
+# Maybe your version of ri has different options and is going interactive.
+# ruby 1.9.3's ri requires a -l option or else if becomes interactive.
+# this program tests out a listbox
+# This is written in the old style where we start and end ncurses and initiate a 
+# getch loop. It gives more control.
+# The new style is to use App which does the ncurses setup and teardown, as well
+# as manages keys. It also takes care of logger and includes major stuff.
+#
+#
+#  TODO: 
+# when pressing enter on left list move focus to right
+require 'logger'
+require 'canis'
+require 'canis/core/widgets/listbox'
+#require 'canis/core/widgets/rtextview'
+#require 'canis/core/include/vieditable'
+require 'shellwords'
+require 'canis/core/widgets/textpad'
+require 'canis/core/util/widgetshortcuts'
+require 'canis/core/util/rcommandwindow'
+require 'rigel'
+
+
+def my_help_text
+    <<-eos
+
+    =========================================================================
+    Basic Usage
+
+    Press <ENTER> on a class name on the first list, to view ri information
+    for it on the right.
+    
+    Tab to right area, and press <ENTER> on a method name, to see its details
+    Press / <slash> in any box to search. e.g /String will take you to the
+    first occurrence of String. <n> will take you to next.
+    
+    To go quickly to first class starting with 'S', type <f> followed by <S>.
+    Then press <n> to go to next match.
+
+    On the right window, you may press BACKSPACE to go back to earlier pages.
+    You may also press Alt-n and Alt-p to cycle through next and previously
+    viewed pages.
+
+    Press Alt-c to enter class or method name and see details. If there is 
+    no data returned, or options returned you may have to select from a list.
+    e.g. entering 'flatten' may return a list of choices to select from.
+    Entering 'Str' returns nothing from ri, so you have to select from classes
+    starting with 'Str'.
+
+    Press Alt-d to get a popup of visited classes, from which you may select.
+
+    Press Alt-b to get a popup of bookmarks, from which you may select.
+
+    Press Alt-m to get a popup of methods for current class, from which you may select.
+
+    '?' displays all key binding for current object. 'Q' and 'C-q' quit.
+    In any popups, try 'C-q' to quit.
+
+    =========================================================================
+    Bookmarks
+
+    Access bookmarks using single-quote as in vim followed by a single character. 
+    Some have been set such as Array, String, Hash, File. To create a bookmark,
+    position cursor over a class in the left list, and press "m". You will be 
+    prompted for the character to use as the mark.
+    
+    =========================================================================
+    Buffers
+
+    Ordinary a textview contains only one buffer. However, the one on the right
+    is extended for multiple buffers. Pressing ENTER on the left on several 
+    rows opens multiple buffers on the right. Use M-n (Alt-N) and M-p to navigate.
+    ALternatively, : maps to a menu, so :n and :p may also be used.
+    <BACKSPACE> will also go to previous buffer, like a browser.
+
+    =========================================================================
+           Press <M-n> for next help screen, or try :n 
+
+    eos
+end
+
+# seems unused now, but may be useful elsewhere
+def convert_man_to_ansi file
+  lines = file.split "\n"
+  l = nil
+  lines.each_with_index do |line, ix|
+    # convert underlined words to yellow or one color, these are usually params
+    line.gsub!(/((_[^ ])+)/,'[4;33m\1[0m')
+    line.gsub!(/_/,'')
+    # convert bold words to red or one color, these are usually headers and other words
+    l= line.gsub(/(([^ ][^ ])+)/,'[1;31m\1[0m').gsub(/[^ ]/,'').gsub(//,'')
+    lines[ix] = l
+  end
+  lines
+end
+##
+#  display the ridoc for given word (class or method or part)
+def display_text word
+  raise "word should be string" unless word.is_a? String
+  w = @form.by_name["tv"]; 
+  lines = get_data word
+  #file = `ri -f bs #{word}`
+  #lines = convert_man_to_ansi file
+  return if lines.nil? || lines.size == 0
+  # ansi can have overflow
+  w.add_content(lines, :content_type => :ansi, :title => word)
+
+  # Since i am trying without border, so need to put class on top right
+  header = @form.by_name["header"]; 
+  header.text_right(word)
+
+  $visited << word unless $visited.index(word)
+  #w.add_content(lines, :title => word)
+  w.buffer_last
+end
+## retrieve data in ansi format.
+#  NOTE that ri returns <t>CLEAR</tt> without the 0. So canis-core does not catch that
+#  it expects a zero there. So i've replaced [[m with [[0m.
+#  @param String class or method name to fetch ri info for
+#  @ returns Array of lines, containing ansi format data
+def get_data str
+  lines = `ri -f ansi #{str} 2>&1`.gsub('[m','[0m').split("\n")
+end
+
+## 
+# prompt user for a class name and show ri doc for same, can be method too
+#
+def ask_classes
+  format="rdoc"
+  str = get_string_with_history("Enter a class name: ")
+  if str && str != ""
+    #lines = `ri -f #{format} #{str}`.split("\n")
+    lines = get_data str
+    if lines.size == 0
+      alert "Nothing came through for #{str}"
+      ## Nothing returned, lets see if we can match something from the class list
+      li = @form.by_name["mylist"]; 
+      values = li.list
+      values = values.grep(/^#{str}/i)
+      if values.size > 0
+        ix = popuplist(values)
+        if ix
+          str = values[ix]
+          #lines = `ri -f #{format} #{str}`.split("\n")
+          lines = get_data str
+        end
+      else
+        alert "Nothing came through for #{str}"
+        $message.value = "Nothing came through for #{str}"
+      end
+    elsif lines.first.index(".#{str} not found")
+      ## we are returned something with some choices, lets prompt user with choices
+      lines.shift
+      lines.shift
+        ix = popuplist(lines)
+        if ix
+          str = lines[ix]
+          #lines = `ri -f #{format} #{str}`.split("\n")
+          lines = get_data str
+        end
+    end
+    return if lines.size == 0
+    w = @form.by_name["tv"]; 
+    w.add_content(lines, :content_type => :ansi, :title => str)
+    #w.add_content(lines, :title => str)
+    w.buffer_last
+    set_focus_on str
+  end
+end
+
+# set focus in list on given string
+def set_focus_on str
+  listb = @form.by_name["mylist"]; 
+  ix = listb.list.index(str)
+  if ix
+    #listb.set_focus_on ix
+    listb.goto_line ix
+  end
+end
+
+## user has pressed bokmark char, now get the mark A-Z
+def ask_bookmark ch=nil
+  unless ch
+    ch = @window.getchar
+    ch = ch.chr.upcase
+  end
+  str = $bookmarks[ch.to_sym]
+  if str
+    display_text str
+    # set focus to that in the left list
+    set_focus_on str
+  else
+    $message.value = "No bookmark for #{ch}. Use m to create."
+    ## No bookmark, jumping to first char 
+    listb = @form.by_name["mylist"]; 
+    listb.set_selection_for_char ch
+  end
+end
+def add_bookmark ch, word
+  $bookmarks[ch.upcase.to_sym] = word
+  alert "set mark for #{ch.upcase.to_sym} for #{word}"
+end
+
+## try various options till you get something.
+#
+def try_ri arr
+  _text = nil
+  arr.each do |w|
+    #_text = `ri -f rdoc #{w} 2>&1`.split("\n")
+    _text = get_data w
+    if _text.first.index("Nothing known about")
+    else
+      break
+    end
+  end
+  _text
+end
+def popup_history
+  return if $visited.size == 0
+  ix = popuplist($visited, :title => " History ", :bgcolor => :black, :color => :white, :row => 1, :col => 1)
+  if ix
+    display_text $visited[ix]
+  end
+end
+#
+# History is accessible using Alt-h while in field, press enter on any row in the popup
+def get_string_with_history prompt
+  $shell_history ||= []
+  cmd = get_string(prompt, :maxlen => 50) do |f|
+    require 'canis/core/include/rhistory'
+    f.extend(FieldHistory)
+    f.history($shell_history)
+  end
+  if cmd && !cmd.empty?
+    $shell_history.push(cmd) unless $shell_history.include? cmd
+  end
+  return cmd
+end
+# switches location of 2 windows 
+# 
+def switch_windows
+  tv = @form.by_name["tv"]
+  list = @form.by_name["mylist"]
+  if tv.col > 0
+    tv.col = 0
+    tmp = tv.width
+    list.col = tmp + 1
+  else
+    list.col = 0
+    tv.col = list.width + 1
+  end
+end
+
+
+include Canis::WidgetShortcuts
+
+#if $0 == __FILE__
+if true
+  include Canis
+
+  begin
+    # Initialize curses
+    Canis::start_ncurses  # this is initializing colors via ColorMap.setup
+
+    $log = create_logger "rigel.log"
+    $visited = []
+    $bookmarks = {
+      :A => "Array",
+      :C => "Class",
+      :D => "Dir",
+      :F => "File",
+      :H => "Hash",
+      :I => "IO",
+      :K => "Kernel",
+      :M => "Module",
+      :O => "OptionParser",
+      :P => "Proc",
+      :S => "String"
+    }
+    config = File.expand_path("~/.rigel.conf")
+    # read up any bookmarks or visited classes, they get added to the existing data
+    if File.exists? config
+      load config
+    end
+
+
+    @window = Canis::Window.root_window
+    colors = Ncurses.COLORS
+    back = :black
+    lineback = :blue
+    back = 234 if colors >= 256
+    lineback = 236 if colors >= 256
+    $window = @window # i need this for get_char, YUCK
+    $catch_alt_digits = true; # emacs like alt-1..9 numeric arguments
+    #install_help_text my_help_text
+    # Initialize few color pairs 
+    # Create the window to be associated with the form 
+    # Un post form and free the memory
+
+    catch(:close) do
+      @form = Form.new @window
+      @form.help_manager.help_text = my_help_text
+      #@form.bind_key(KEY_F1, 'help'){ display_app_help }
+      @form.bind_key(?\M-c, 'select class') do
+        ask_classes
+      end
+      @form.bind_key(FFI::NCurses::KEY_F5, 'switch_windows'){ switch_windows }
+      @form.bind_key(?', 'select bookmark') do
+        ask_bookmark
+      end
+      # Alt-h is taken by scrolling in list and textareas
+      @form.bind_key(?\M-d, 'View history') do
+        popup_history
+      end
+      @form.bind_key(?\M-b, 'View bookmarks') do
+        # Display bookmarks and allow user to select one
+        list = []
+        $bookmarks.each_pair { |k, v| list << "   #[fg=yellow, bold] #{k} #[/end]    #[fg=cyan] #{v} #[/end]" }
+        ch = padpopup list, :title => "View Bookmarks", :row => 1, :col => 1
+        ask_bookmark ch.upcase
+      end
+
+      widget_shortcuts_init
+      header = app_header "0.0.1", :text_center => "ri Documentation Browser", :text_right =>"rigel" , :name => "header" , :color => :white, :bgcolor => lineback , :attr => :bold 
+
+
+
+        #"#[bg=236, fg=black]#[fg=yellow, bold]F1#[/end] Help | #[fg=yellow, bold]?#[/end] Keys | #[fg=yellow, bold]M-c#[/end] Ask | #[fg=yellow, bold]M-d#[/end] History | #[fg=yellow, bold]M-m#[/end] Methods | #[fg=yellow, bold]M-b#[/end] Bookmarks | Q Quit | %20s" % [$message.value]
+        _col = "#[fg=yellow]"
+      $message = Variable.new
+      $message.value = ""
+      @status_line = status_line :row => Ncurses.LINES-1 #, :bgcolor => :red, :color => :yellow
+      @status_line.command {
+        "#[bg=236, fg=black]#{_col}F1#[/end] Help | #{_col}?#[/end] Keys | #{_col}M-c#[/end] Ask | #{_col}M-d#[/end] History | #{_col}M-m#[/end] Methods | #{_col}M-b#[/end] Bookmarks | Q Quit | %20s" % [$message.value]
+      }
+
+      h = FFI::NCurses.LINES-2
+      mylist = `ri -l `.split("\n")
+      $classnames = mylist
+      w = 25
+      r = 1
+
+      listb = Listbox.new @form, :name   => "mylist" ,
+        :row  => r ,
+        :col  => 0 ,
+        :width => w,
+        :height => h,
+        :list => mylist,
+        :selection_mode => :SINGLE,
+        :show_selector => true,
+        :suppress_borders => true,
+        :bgcolor => back,
+        :color => :white,
+        :title => " Ruby Classes "
+      #title_attrib 'reverse'
+      #listb.vieditable_init_listbox
+      # what for is Io here
+      #include Io
+      #listb.bind_key(32) {|l| l.scroll_forward };
+      listb.bind(:PRESS) { 
+        ## select class and display riinfo for class
+        #display_text listb.text
+        display_text listb.current_value
+      }
+      listb.bind_key(?m) { 
+        #str = listb.text
+        str = listb.current_value
+        ch = get_string("Enter character as shortcut for #{str}")
+        if ch && ch != ""
+          add_bookmark ch[0], str
+        end
+        ## select class and display riinfo for class
+      }
+      # since keys are added at handle_key, really late, therefore unbind is of no use.
+      listb.bind_key(?', 'select bookmark') do
+        ask_bookmark
+      end
+
+      tv = Canis::TextPad.new @form, :row => r, :col => w+0, :height => h, :width => FFI::NCurses.COLS-w-0,
+        :name => "tv", :title => "Press Enter on Class", :suppress_borders => true
+      tv.set_content ["Press Enter on list to view ri information in this area.", 
+        "Press ENTER on method name to see details"]
+      require 'canis/core/include/multibuffer'
+      tv.extend(Canis::MultiBuffers)
+      #tv.unbind_key([?', ?'])
+      #tv.unbind_key(?')
+      tv.bind_key(?', 'select bookmark') do
+        ask_bookmark
+      end
+
+      # pressing ENTER on a method name will popup details for that method
+      tv.bind(:PRESS) { |ev|
+        w = ev.word_under_cursor.strip
+        # check that user did not hit enter on empty area
+        if w != ""
+          str = "#{tv.title}.#{w}"
+          _text = try_ri(["#{str}", w])
+          tt = tv.title
+          if _text.first.index("Nothing known about")
+          
+            if tt.index("::")
+              ix = tt.index("::")
+              tt = tt[0,ix]
+         
+              _text = get_data "#{tt}::#{w}"
+            end
+          end
+          if _text && _text.size != 0
+            view(_text, :content_type => :ansi)
+            #view(_text)
+          end
+        end
+      }
+      @form.bind_key(?\M-m, "Select methods") {
+        tv = @form.by_name["tv"]; 
+        kl = tv.title.strip
+        if kl.index "."
+          kl = kl.split(".")[0]
+        end
+
+        # 2013-03-21 - 19:50 since the display may be of a selected method
+        # so we requery the methods each time. Can we go to old position somehow ?
+        lines = `ri -f rdoc #{kl} 2>&1`.split("\n")
+        # 2013-03-21 - 19:09 Fixed, had stopped working after change to ansi format
+        #ix = lines.grep(/Instance methods:/)
+        ix = lines.index("= Instance methods:")
+        unless ix
+          alert "No instance methods found for #{kl}"
+        end
+        if ix
+          values = lines[ix+2..-1]
+          values = values.collect { |x| x.strip }
+          #ix = popuplist(values)
+          #ix = popuplist(values, :title => " Methods ", :bgcolor => :blue, :color => :white)
+          # the problem is when the list is longer than indexing values
+          # since we are not doing pagin in this small popup.
+          #
+          # maybe whenever we scroll or page, redo the numbering from a, and keep sta
+          #meth = Rigel::indexed_list("Methods", values)
+          meth = Rigel::ri_full_indexed_list(values, :title => "Methods")
+          if meth
+            meth = meth.strip
+            # 2013-03-23 - 00:33 shell escape required for methods like << & [] etc else error
+            # from shell which messes screen.
+            meth = Shellwords.escape(meth)
+            display_text "#{kl}.#{meth}"
+          end
+        end
+      }
+      @form.bind_key(?\M-x, "Select classes"){
+        # TODO : this is case sensitive and uses contiguous, we need fuzzy
+        command = Proc.new {|str| $classnames.select do |line| line =~ /#{str}/i ; end }
+        # fuzzy but can be quite a pain since i am not prioritizing in any way
+        #command = Proc.new {|str| patt = str.split("").join(".*"); $classnames.select do |line| line =~ /#{patt}/i ; end }
+        str = display_list $classnames, :title => "Select a class", :command => command
+        if str
+          display_text str
+          set_focus_on str
+        end
+      }
+
+      @form.repaint
+      @window.wrefresh
+      Ncurses::Panel.update_panels
+      while((ch = @window.getchar()) != KEY_F10 )
+        break if ch == ?Q.ord || ch == ?\C-q.getbyte(0)
+        @form.handle_key(ch)
+        @window.wrefresh
+      end
+    end
+  rescue => ex
+    textdialog ["Error in rib: #{ex} ", *ex.backtrace], :title => "Exception"
+    $log.debug( ex) if ex
+    $log.debug(ex.backtrace.join("\n")) if ex
+  ensure
+    @window.destroy if !@window.nil?
+    Canis::stop_ncurses
+    p ex if ex
+    p(ex.backtrace.join("\n")) if ex
+  end
+  else
+    puts "Error #{$0}, #{__FILE__}"
+end

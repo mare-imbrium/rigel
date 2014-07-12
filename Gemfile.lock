@@ -1,0 +1,26 @@
+PATH
+  remote: .
+  specs:
+    rigel (0.0.1)
+      canis (>= 0.0.3)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    canis (0.0.3)
+      ffi-ncurses (>= 0.4.0)
+    ffi (1.9.3)
+    ffi-locale (1.0.1)
+      ffi (>= 1.0.9)
+    ffi-ncurses (0.4.0)
+      ffi (>= 1.0.9)
+      ffi-locale (>= 1.0.0)
+    rake (10.3.2)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  bundler (~> 1.6)
+  rake (>= 0.9.6)
+  rigel!

@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.authors       = ["kepler"]
   spec.email         = ["githubkepler.50@gishpuppy.com"]
   spec.summary       = %q{ruby documentation browser in terminal (text/ncurses)}
-  spec.description   = %q{TODO: Write a longer description. Optional.}
-  spec.homepage      = ""
+  spec.description   = %q{Ruby documentation (ri) browser in text terminals using ncurses}
+  spec.homepage      = "https://github.com/mare-imbrium/rigel"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files -z`.split("\x0")

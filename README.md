@@ -8,6 +8,9 @@ Classes on the left list, and details on the right.
 You may press Enter on a class to see its documention. Pressing ENTER over a method in the right will
 fetch its details.
 
+M-x gives a Ctrl-P like list displaying classes, and one can filter from them and select just as one does
+with Ctrl-P. Pressing "/" in the classes list, also lets you type in a string to search from.
+
 You may mark classes with an upper case alphabet (vim style by pressing 'm' in the left list) and access them directly using single-quote.
 Several classes have been bookmarked such as Array, String, Hash, File. You may place more in a file named "~/.rigel.conf" in the form:
 

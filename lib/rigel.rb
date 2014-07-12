@@ -498,7 +498,7 @@ module Rigel
       viewport = padup_list viewport
       viewport = index_this_list viewport
       alist = columnate viewport, grows
-      lb.formatted_text(alist, :tmux)
+      lb.text(alist, :tmux)
       # we need to show the next 1 to n of n for long lists
       #@header.text_right "#{$sta+1} to #{fin} of #{fl}"
       #

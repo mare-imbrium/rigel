@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    rigel (0.0.1)
+    rigel (0.0.2)
       canis (>= 0.0.3)
 
 GEM

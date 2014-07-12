@@ -341,7 +341,7 @@ if true
       $message.value = ""
       @status_line = status_line :row => Ncurses.LINES-1 #, :bgcolor => :red, :color => :yellow
       @status_line.command {
-        "#[bg=236, fg=black]#{_col}F1#[/end] Help | #{_col}?#[/end] Keys | #{_col}M-c#[/end] Ask | #{_col}M-d#[/end] History | #{_col}M-m#[/end] Methods | #{_col}M-b#[/end] Bookmarks | Q Quit | %20s" % [$message.value]
+        "#[bg=236, fg=black]#{_col}F1#[/end] Help | #{_col}?#[/end] Keys | #{_col}M-x#[/end] Classes | #{_col}M-d#[/end] History | #{_col}M-m#[/end] Methods | #{_col}M-b#[/end] Bookmarks | #{_col}M-c#[/end] Ask | Q Quit | %20s" % [$message.value]
       }
 
       h = FFI::NCurses.LINES-2
@@ -479,7 +479,7 @@ if true
       end
     end
   rescue => ex
-    textdialog ["Error in rib: #{ex} ", *ex.backtrace], :title => "Exception"
+    textdialog ["Error in rigel: #{ex} ", *ex.backtrace], :title => "Exception"
     $log.debug( ex) if ex
     $log.debug(ex.backtrace.join("\n")) if ex
   ensure

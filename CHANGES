@@ -1,0 +1,3 @@
+0.0.3 
+ - using capture2e for calling ri command in place of backticks, due to stderrs coming on screen
+ - rescue when doing upcase in bookmarks so that up arrow etc don't give alert about out of char range.

@@ -48,7 +48,7 @@ To get ri documentation, you would do
 
 If you use any gems for development, e.g. highline or rbcurse-core, use the `--ri` flag while installing the gem (this assumes you've switched off ri and rdocs in your .gemrc).
 
-This gem depends on rbcurse-core
+This gem depends on 'canis' 
 
 ## Gem name
 

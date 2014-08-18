@@ -337,7 +337,7 @@ if true
       end
 
       widget_shortcuts_init
-      header = app_header "0.0.1", :text_center => "ri Documentation Browser", :text_right =>"rigel" , :name => "header" , :color => :white, :bgcolor => lineback , :attr => :bold 
+      header = app_header "rigel 0.0.3", :text_center => "ri Documentation Browser", :text_right =>"rigel" , :name => "header" , :color => :white, :bgcolor => lineback , :attr => :bold 
 
 
 

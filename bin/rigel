@@ -29,6 +29,7 @@ require 'canis/core/widgets/textpad'
 require 'canis/core/util/widgetshortcuts'
 require 'canis/core/util/rcommandwindow'
 require 'rigel'
+require 'open3'
 
 
 def my_help_text
@@ -129,7 +130,9 @@ end
 #  @param String class or method name to fetch ri info for
 #  @ returns Array of lines, containing ansi format data
 def get_data str
-  lines = `ri -f ansi #{str} 2>&1`.gsub('[m','[0m').split("\n")
+  #lines = `ri -f ansi #{str} 2>&1`.gsub('[m','[0m').split("\n")
+  oe, s = Open3.capture2e("ri -f ansi #{str}")
+  lines = oe.gsub('[m','[0m').split("\n")
 end
 
 ## 
@@ -192,7 +195,8 @@ end
 def ask_bookmark ch=nil
   unless ch
     ch = @window.getchar
-    ch = ch.chr.upcase
+    ch = ch.chr.upcase rescue nil
+    return unless ch
   end
   str = $bookmarks[ch.to_sym]
   if str
@@ -315,6 +319,8 @@ if true
         ask_classes
       end
       @form.bind_key(FFI::NCurses::KEY_F5, 'switch_windows'){ switch_windows }
+      # we have bound this to textpad and listb, so perhaps not required here. it is getting triggered
+      #  two times somehow. It is still calling ask two times
       @form.bind_key(?', 'select bookmark') do
         ask_bookmark
       end
@@ -382,6 +388,7 @@ if true
         ## select class and display riinfo for class
       }
       # since keys are added at handle_key, really late, therefore unbind is of no use.
+      # This is getting triggered two times ? by form and listb
       listb.bind_key(?', 'select bookmark') do
         ask_bookmark
       end

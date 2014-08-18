@@ -1,0 +1,4 @@
+[x] (B) hung after asking for open3, ri was expecting input or something :
+    Moved to capture3
+[x] (B) 258 out of range. alert after 'P then down-arrow. : Went to Proc on pressing single-q p then down arrow gave alert
+    Bug in canis, fixed.
